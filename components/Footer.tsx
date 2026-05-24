@@ -5,13 +5,29 @@ import GithubIcon from './icons/GithubIcon';
 import DiscordIcon from './icons/DiscordIcon';
 import Link from 'next/link';
 
-const FooterLink: React.FC<{ href: string; children: React.ReactNode }> = ({ href, children }) => (
-  <li>
-    <Link href={href} className="text-gray-400 dark:text-swa-light-gray hover:text-swa-green transition-colors text-sm">
-      {children}
-    </Link>
-  </li>
-);
+const FooterLink: React.FC<{ href: string; children: React.ReactNode; isExternal?: boolean }> = ({ href, children, isExternal }) => {
+  if (isExternal) {
+    return (
+      <li>
+        <a 
+          href={href} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-gray-400 dark:text-swa-light-gray hover:text-swa-green transition-colors text-sm"
+        >
+          {children}
+        </a>
+      </li>
+    );
+  }
+  return (
+    <li>
+      <Link href={href} className="text-gray-400 dark:text-swa-light-gray hover:text-swa-green transition-colors text-sm">
+        {children}
+      </Link>
+    </li>
+  );
+};
 
 const Footer: React.FC = () => {
   return (
@@ -26,7 +42,7 @@ const Footer: React.FC = () => {
                 <a href="#" aria-label="Swalang on Twitter" className="text-gray-400 dark:text-swa-light-gray hover:text-swa-green transition-colors">
                     <TwitterIcon className="h-5 w-5" />
                 </a>
-                <a href="#" aria-label="Swalang on Github" className="text-gray-400 dark:text-swa-light-gray hover:text-swa-green transition-colors">
+                <a href="https://github.com/deniskipeles/swalang-beta" target="_blank" rel="noopener noreferrer" aria-label="Swalang on Github" className="text-gray-400 dark:text-swa-light-gray hover:text-swa-green transition-colors">
                     <GithubIcon className="h-5 w-5" />
                 </a>
                 <a href="#" aria-label="Join Swalang Discord" className="text-gray-400 dark:text-swa-light-gray hover:text-swa-green transition-colors">
@@ -63,9 +79,9 @@ const Footer: React.FC = () => {
           <div>
             <h3 className="font-bold text-sm tracking-widest uppercase mb-4">Contribute</h3>
             <ul className="space-y-3">
-              <FooterLink href="#">Issue Tracker</FooterLink>
-              <FooterLink href="#">Source Code</FooterLink>
-              <FooterLink href="#">Developer's Guide</FooterLink>
+              <FooterLink href="https://github.com/deniskipeles/swalang-beta/issues" isExternal={true}>Issue Tracker</FooterLink>
+              <FooterLink href="https://github.com/deniskipeles/swalang-beta" isExternal={true}>Source Code</FooterLink>
+              <FooterLink href="/developer-guide">Developer's Guide</FooterLink>
             </ul>
           </div>
         </div>

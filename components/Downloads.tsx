@@ -162,8 +162,8 @@ const Downloads: React.FC = () => {
                             ) : (
                                 <>
                                     <Checksum label="macOS (apple-darwin)" hash={getHashForPattern("apple-darwin")} />
-                                    <Checksum label="Windows (.exe)" hash={getHashForPattern(".exe")} />
-                                    <Checksum label="Linux (linux-musl)" hash={getHashForPattern("linux-musl")} />
+                                    <Checksum label="Windows (.exe)" hash={getHashForPattern("windows-x86_64")} />
+                                    <Checksum label="Linux (linux-musl)" hash={getHashForPattern("linux-x86_64")} />
                                 </>
                             )}
                         </div>
