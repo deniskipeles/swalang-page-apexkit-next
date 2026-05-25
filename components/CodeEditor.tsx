@@ -56,8 +56,8 @@ const findParentId = (nodes: FileSystemNode[], childId: string): string | null =
 
 const App: React.FC = () => {
   const [fileSystem, setFileSystem] = useState<FileSystemNode[]>(initialFileSystem);
-  const [openFileIds, setOpenFileIds] = useState<Set<string>>(new Set(['12'])); // Open main.sw by default
-  const [activeFileId, setActiveFileId] = useState<string | null>('12'); // Set main.sw active by default
+  const [openFileIds, setOpenFileIds] = useState<Set<string>>(new Set(['12', '13'])); // Open default files
+  const [activeFileId, setActiveFileId] = useState<string | null>('12'); // Set main.sw active
   const [fileContents, setFileContents] = useState<Record<string, string>>(() => {
       const contents: Record<string, string> = {};
       const traverse = (nodes: FileSystemNode[]) => {
@@ -85,6 +85,23 @@ const App: React.FC = () => {
   const [webSocket, setWebSocket] = useState<WebSocket | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
 
+  // Appends streaming character chunks safely by splitting and reconstructing line boundaries
+  const appendChunkToLogs = useCallback((chunk: string) => {
+    setConsoleLogs(prev => {
+        if (prev.length === 0) return [chunk];
+        const lastIdx = prev.length - 1;
+        const lastLine = prev[lastIdx];
+        
+        const lines = chunk.split('\n');
+        const updatedLastLine = lastLine + lines[0];
+        
+        const newLogs = [...prev.slice(0, lastIdx), updatedLastLine];
+        if (lines.length > 1) {
+            newLogs.push(...lines.slice(1));
+        }
+        return newLogs;
+    });
+  }, []);
 
   const openFiles = useMemo(() => {
     return [...openFileIds].map(id => findFileById(fileSystem, id)).filter((file): file is File => file !== null);
@@ -130,12 +147,22 @@ const App: React.FC = () => {
             setWebSocket(ws);
 
             ws.onopen = () => {
-                 setConsoleLogs(prev => [...prev.filter(log => !log.includes('Connecting') && !log.includes('Retrying')), 'Connected to execution server.']);
+                 setConsoleLogs(prev => [...prev.filter(log => !log.includes('Connecting') && !log.includes('Retrying')), 'Connected to execution server. Ready.']);
             };
 
             ws.onmessage = (event) => {
                 try {
                     const message = JSON.parse(event.data);
+                    
+                    if (message.type === 'status') {
+                        if (message.content === 'running') {
+                            appendChunkToLogs('[System] Sandbox running. Standard input active.\n');
+                        } else if (message.content === 'stopped') {
+                            appendChunkToLogs('\n[System] Execution complete.\n');
+                        }
+                        return;
+                    }
+
                     let logMessage = '';
                     switch(message.type) {
                         case 'stdout':
@@ -150,9 +177,9 @@ const App: React.FC = () => {
                         default:
                             logMessage = `[server] ${event.data}`;
                     }
-                    setConsoleLogs(prev => [...prev, logMessage]);
+                    appendChunkToLogs(logMessage);
                 } catch(e) {
-                    setConsoleLogs(prev => [...prev, event.data]);
+                    appendChunkToLogs(event.data);
                 }
             };
 
@@ -180,16 +207,16 @@ const App: React.FC = () => {
             ws.close();
         }
     };
-  }, []);
+  }, [appendChunkToLogs]);
 
-  const flattenFiles = (nodes: FileSystemNode[], path: string = ''): { path: string, content: string }[] => {
+  const flattenFilesArray = (nodes: FileSystemNode[], path: string = ''): { path: string, content: string }[] => {
     let files: { path: string, content: string }[] = [];
     for (const node of nodes) {
         const newPath = path ? `${path}/${node.name}` : node.name;
         if (node.type === 'file') {
             files.push({ path: newPath, content: fileContents[node.id] ?? node.content });
         } else {
-            files = files.concat(flattenFiles(node.children, newPath));
+            files = files.concat(flattenFilesArray(node.children, newPath));
         }
     }
     return files;
@@ -205,7 +232,7 @@ const App: React.FC = () => {
     setConsoleLogs(['Uploading files...']);
 
     try {
-        const filesToUpload = flattenFiles(fileSystem);
+        const filesToUpload = flattenFilesArray(fileSystem);
         const uploadPromises = filesToUpload.map(file =>
             fetch(`${SWALANG_API_URL}/api/session/${sessionId}/files`, {
                 method: 'POST',
@@ -219,7 +246,7 @@ const App: React.FC = () => {
         
         await Promise.all(uploadPromises);
 
-        setConsoleLogs(prev => [...prev, 'Files uploaded successfully.', 'Executing code...']);
+        setConsoleLogs(['[System] Running Swalang pipeline...\n']);
         webSocket.send(JSON.stringify({ action: 'run' }));
     } catch (error) {
         console.error('Failed to run code:', error);
@@ -314,9 +341,18 @@ const App: React.FC = () => {
     }
   }, [activeFileId, dirtyFileIds, fileContents, activeFile]);
 
+  // Handle active input transmissions on console commands (stdin write)
   const handleCommand = useCallback((command: string) => {
-    setConsoleLogs(prev => [...prev, `> ${command}`, `command '${command}' executed (mock)`]);
-  }, []);
+    if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+        setConsoleLogs(prev => [...prev, `> ${command}`]);
+        webSocket.send(JSON.stringify({
+            action: "input",
+            data: command + "\n"
+        }));
+    } else {
+        setConsoleLogs(prev => [...prev, `> ${command}`, 'Error: Not connected to running process.']);
+    }
+  }, [webSocket]);
 
   const handleStartRename = useCallback((nodeId: string) => {
     setRenamingId(nodeId);
@@ -359,7 +395,7 @@ const App: React.FC = () => {
 
     const newId = new Date().getTime().toString();
     const newNode: FileSystemNode = type === 'file' 
-      ? { id: newId, name: 'untitled.txt', type: 'file', content: '' }
+      ? { id: newId, name: 'untitled.sw', type: 'file', content: '' }
       : { id: newId, name: 'New Folder', type: 'folder', children: [] };
 
     const addNodeToTree = (nodes: FileSystemNode[], parentId: string | null, newNode: FileSystemNode): FileSystemNode[] => {

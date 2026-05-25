@@ -355,8 +355,8 @@ export async function getPackages(page = 1, limit = 12, query = "") {
       // Note: Vector search currently returns top N matches by relevance.
       // Pagination is less strict here, usually we just return top 20-50.
       const res = await apex.collection('packages').searchRecordsWithOSE(query);
-      
-      const items = res.map((i: any) => ({
+      console.log(res)
+      const items = res.map((i) => ({
           id: i.id,
           name: i.data.name,
           slug: i.data.slug,
